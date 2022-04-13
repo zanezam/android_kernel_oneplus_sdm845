@@ -28,6 +28,10 @@ patch_vbmeta_flag=auto;
 # import patching functions/variables - see for reference
 . tools/ak3-core.sh;
 
+## AnyKernel file attributes
+# set permissions/ownership for included ramdisk files
+set_perm_recursive 0 0 750 750 $ramdisk/*;
+
 ## Trim data partition
 $bin/busybox fstrim -v /data;
 
