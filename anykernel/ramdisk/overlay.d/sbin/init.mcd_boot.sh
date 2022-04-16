@@ -24,12 +24,8 @@ echo 512 > /sys/block/sdf/queue/read_ahead_kb
 
 # Input boost and stune configuration
 echo "0:1056000 1:0 2:0 3:0 4:0 5:0 6:0 7:0" > /sys/module/cpu_boost/parameters/input_boost_freq
-echo 500 > /sys/module/cpu_boost/parameters/input_boost_ms
+echo 500 > /sys/module/cpu_boost/parameters/input_boost_duration
 echo 5 > /dev/stune/top-app/schedtune.boost
-
-# Disable scheduler core_ctl
-echo 0 > /sys/devices/system/cpu/cpu0/core_ctl/enable
-echo 0 > /sys/devices/system/cpu/cpu4/core_ctl/enable
 
 # Set min cpu freq
 echo 300000 > /sys/devices/system/cpu/cpu0/cpufreq/scaling_min_freq
