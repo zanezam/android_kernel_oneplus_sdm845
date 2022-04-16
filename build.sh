@@ -13,11 +13,11 @@
 # save toolchain name option for later image file naming
 TC="$1"
 
-# version of this script
-SCRIPTVER="3.0"
+# keep the directory of execution
+IAMHERE=`pwd`
 
-# mcdachpappe kernel release (source-base of the build)
-BSREL=r`git tag --sort=committerdate | grep -E '[0-9]' | tail -1 | cut -b 2-7`
+# version of this script
+SCRIPTVER="3.1"
 
 # version of the build
 BUILDVERSION=""
@@ -48,6 +48,10 @@ BUILDHOST=""
 if [ -z "$BUILDHOST" ]; then
     BUILDHOST=`hostname`
 fi
+
+# mcdachpappe kernel release (source-base of the build)
+cd $SOURCEDIR
+BSREL=r`git tag --sort=committerdate | grep -E '[0-9]' | tail -1 | cut -b 2-7`
 
 # name of the kernel (for zip package naming)
 KERNAME="mcd-$BSREL-zzupreme"
@@ -109,6 +113,11 @@ endtime()
     printf "%d sec(s)\n" $E_SEC
 }
 
+pause()
+{
+    read -p "$1"
+}
+
 print_info()
 {
     echo ""
@@ -158,7 +167,6 @@ build_clang() {
     export KBUILD_COMPILER_STRING="$($CLANGTOOLCHAIN/bin/clang --version | head -n 1 | perl -pe 's/\(http.*?\)//gs' | sed -e 's/  */ /g' -e 's/[[:space:]]*$//')"
     print_info
     clean_tree
-    cd $SOURCEDIR
     git checkout $1
     if [ -f arch/arm64/configs/$KERNCONFIG ]; then
         make O=$OUTDIR ARCH=arm64 $KERNCONFIG
@@ -192,48 +200,21 @@ build_clang() {
 
 case "$1" in
 
-linaro)
-clear
-export KBUILD_BUILD_VERSION=$BSREL
-export KBUILD_BUILD_USER=$BUILDUSER
-export KBUILD_BUILD_HOST=$BUILDHOST
-export KBUILD_COMPILER_STRING="$($LINAROTOOLCHAIN/bin/aarch64-linux-gnu-gcc -v 2>&1 | grep ' version ' | sed 's/[[:space:]]*$//')"
-print_info
-clean_tree
-cd $SOURCEDIR
-git checkout zzupreme-linaro
-if [ -f arch/arm64/configs/$KERNCONFIG ]; then
-    make O=$OUTDIR ARCH=arm64 $KERNCONFIG
-else
-    echo "$KERNCONFIG config not found, be sure that it exist in $SOURCEDIR/arch/arm64/configs!!"
-    exit 1
-fi
-./scripts/config --file out/.config -e BUILD_ARM64_DT_OVERLAY
-make O=$OUTDIR ARCH=arm64 olddefconfig
-make O=$OUTDIR ARCH=arm64 CROSS_COMPILE=$LINGCCTOOLCHAIN DTC_EXT=dtc -j$NUM_CORES 2>&1 | tee $BUILDLOG
-echo ""
-echo "Build done!"
-endtime && endtime >> $BUILDLOG
-if [ -f $SOURCEDIR/$OUTDIR/arch/arm64/boot/Image.gz ]; then
-    cp -rf $ANYKERNEL $OUTDIR/anykernel
-    cp -f $SOURCEDIR/$OUTDIR/arch/arm64/boot/Image.gz $OUTDIR/anykernel
-    find . -name "*.dtb" -exec cp -f '{}' $OUTDIR/anykernel \;
-    cat $OUTDIR/anykernel/Image.gz $OUTDIR/anykernel/*.dtb > $OUTDIR/anykernel/Image.gz-dtb;
-    rm -f $OUTDIR/anykernel/*.dtb
-    rm -f $OUTDIR/anykernel/Image.gz
-else
-    echo "No image file found! Something went wrong, check $BUILDLOG!!"
-    exit 1
-fi
-
-pack_image
-;;
-
 clang)
 clear
 build_clang mcd-R-custom-zzupreme
+if [ "$2" == "break" ]; then
+    pause "CUSTOM build done, press enter to continue with OOS build..."
+fi
+cp -f $SOURCEDIR/$OUTDIR/anykernel/kernels/custom/Image.gz-dtb $SOURCEDIR
+$IAMHERE/$0 clean
 build_clang mcd-R-zzupreme
+if [ "$2" == "break" ]; then
+    pause "OOS build done, press enter to continue with pack images into anykernel zip..."
+fi
+mv -f  $SOURCEDIR/Image.gz-dtb $SOURCEDIR/$OUTDIR/anykernel/kernels/custom/Image.gz-dtb
 pack_image
+$IAMHERE/$0 clean
 ;;
 
 clean)
@@ -248,10 +229,10 @@ git status
 echo ""
 echo "Build Script $SCRIPTVER for ZZupreme Kernel Builds by ZaneZam"
 echo ""
-echo "Usage: $0 clang | linaro | clean"
-echo "clang   - build with clang toolchain ($CLANGTOOLCHAIN)"
-echo "linaro  - build with linaro toolchain ($LINAROTOOLCHAIN)"
-echo "clean   - clean sources (deletes dir $SOURCEDIR/$OUTDIR)"
+echo "Usage: $0 clang | clean"
+echo "clang        - build with clang toolchain ($CLANGTOOLCHAIN)"
+echo "clang break  - build with clang toolchain and stop between the build steps ($CLANGTOOLCHAIN)"
+echo "clean        - clean sources (deletes dir $SOURCEDIR/$OUTDIR)"
 echo ""
 ;;
 
