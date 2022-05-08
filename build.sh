@@ -17,7 +17,7 @@ TC="$1"
 IAMHERE=`pwd`
 
 # version of this script
-SCRIPTVER="3.1"
+SCRIPTVER="3.2"
 
 # version of the build
 BUILDVERSION=""
@@ -68,23 +68,8 @@ BUILDLOG="$SOURCEDIR/$OUTDIR/zz_buildlog_$TC.log"
 # release directory in which the ready kernel zips land
 RELEASEDIR="$PROJECTDIR/releases"
 
-# this is the linaro toolchain folder (root of toolchain folder without prefix)
-LINAROTOOLCHAIN="/path/to/toolchain/gcc-linaro-7.5.0-2019.12-x86_64_aarch64-linux-gnu"
-
-# this is a Linaro toolchain (binary prefix name)
-LINGCCTOOLCHAIN="/path/to/toolchain/gcc-linaro-7.5.0-2019.12-x86_64_aarch64-linux-gnu/bin/aarch64-linux-gnu-"
-
-# this is the clang toolchain folder (root of toolchain folder without prefix of upstream toolchain version)
-CLANGTOOLCHAIN="/path/to/toolchain/clang-r383902"
-
-# this is the stock gcc toolchain folder for clang compilation (needed for linking etc. to fix odd issues)
-STOCKTOOLCHAIN="/path/to/toolchain/aarch64-linux-android-4.9" # this is the folder to the android Q compatible gcc stock toolchain
-
-# this is the stock 32bit gcc toolchain folder for clang compilation (needed for linking etc. to fix odd issues)
-STOCK32TOOLCHAIN="/path/to/toolchain/arm-linux-androideabi-4.9"
-
-# this is the stock 64bit gcc toolchain folder for clang compilation (provided toolchain: https://github.com/mcdachpappe/mcd-clang)
-CROSSAARCHTOOLCHAIN="/path/to/toolchain/mcd-clang"
+# this is the clang toolchain folder (root of toolchain folder without prefix) -> provided toolchain: https://github.com/mcdachpappe/mcd-clang (all in one combined toolset)
+CLANGTOOLCHAIN="/werkstatt/entwicklung/toolchains/clang/mcd-clang"
 
 # set number of cpu cores to be used. leave empty for autodetection
 NUM_CORES=
@@ -140,16 +125,18 @@ pack_image()
     STAMP=`date +%Y-%m-%d-%H%M%S`
     echo ""
     echo "Going to pack kernel image files into anykernel template zip now..."
-    rm -f $OUTDIR/anykernel/kernel/placeholder
-    rm -f $OUTDIR/anykernel/dtbs/placeholder
-    cd  $OUTDIR/anykernel
+    rm -f  $SOURCEDIR/$OUTDIR/anykernel/kernels/custom/not_empty
+    rm -f  $SOURCEDIR/$OUTDIR/anykernel/kernels/oos/not_empty
+    cd  $SOURCEDIR/$OUTDIR/anykernel
     zip -r $KERNAME-$BUILDVERSION-$VERSIONADD-$STAMP-$TC-anykernel.zip .
     echo "Done!"
     echo ""
     sign_image
     md5sum $KERNAME-$BUILDVERSION-$VERSIONADD-$STAMP-$TC-anykernel.zip > $KERNAME-$BUILDVERSION-$VERSIONADD-$STAMP-$TC-anykernel.md5
+    sha1sum $KERNAME-$BUILDVERSION-$VERSIONADD-$STAMP-$TC-anykernel.zip > $KERNAME-$BUILDVERSION-$VERSIONADD-$STAMP-$TC-anykernel.sha1
     mv -f $KERNAME-$BUILDVERSION-$VERSIONADD-$STAMP-$TC-anykernel.zip $RELEASEDIR
     mv -f $KERNAME-$BUILDVERSION-$VERSIONADD-$STAMP-$TC-anykernel.md5 $RELEASEDIR
+    mv -f $KERNAME-$BUILDVERSION-$VERSIONADD-$STAMP-$TC-anykernel.sha1 $RELEASEDIR
     echo ""
     echo "$KERNAME-$BUILDVERSION-$VERSIONADD-$STAMP-$TC-anykernel.zip placed in $RELEASEDIR"
     echo ""
@@ -176,7 +163,7 @@ build_clang() {
     fi
     ./scripts/config --file out/.config -e BUILD_ARM64_DT_OVERLAY
     make O=$OUTDIR ARCH=arm64 olddefconfig
-    PATH="$CLANGTOOLCHAIN/bin:$CROSSAARCHTOOLCHAIN/bin:$STOCKTOOLCHAIN/bin:$STOCK32TOOLCHAIN/bin:${PATH}" make -j$NUM_CORES O=$OUTDIR ARCH=arm64 CC=clang CLANG_TRIPLE=aarch64-linux-gnu- CROSS_COMPILE=llvm- CROSS_COMPILE_AARCH=aarch64-linux-android- CROSS_COMPILE_ARM32=arm-linux-androideabi- DTC_EXT=dtc 2>&1 | tee $BUILDLOG
+    PATH="$CLANGTOOLCHAIN/bin:${PATH}" make -j$NUM_CORES O=$OUTDIR ARCH=arm64 LLVM=1 CC=clang CROSS_COMPILE=aarch64-linux-gnu- CROSS_COMPILE_ARM32=arm-linux-gnueabi- DTC_EXT=dtc 2>&1 | tee $BUILDLOG
     echo ""
     echo "Build done!"
     endtime && endtime >> $BUILDLOG
@@ -193,7 +180,7 @@ build_clang() {
         rm -f $OUTDIR/anykernel/kernels/$flavor/*.dtb
         rm -f $OUTDIR/anykernel/kernels/$flavor/Image.gz
     else
-        echo "No image file found! Something went wrong, check $BUILDLOG!!"
+        echo "No kernel image file found! Something went wrong, check $BUILDLOG!!"
         exit 1
     fi
 }
@@ -210,7 +197,7 @@ cp -f $SOURCEDIR/$OUTDIR/anykernel/kernels/custom/Image.gz-dtb $SOURCEDIR
 $IAMHERE/$0 clean
 build_clang mcd-R-zzupreme
 if [ "$2" == "break" ]; then
-    pause "OOS build done, press enter to continue with pack images into anykernel zip..."
+    pause "OOS build done, press enter to continue with packing images into anykernel zip..."
 fi
 mv -f  $SOURCEDIR/Image.gz-dtb $SOURCEDIR/$OUTDIR/anykernel/kernels/custom/Image.gz-dtb
 pack_image
