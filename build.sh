@@ -17,7 +17,7 @@ TC="$1"
 IAMHERE=`pwd`
 
 # version of this script
-SCRIPTVER="3.2"
+SCRIPTVER="3.3"
 
 # version of the build
 BUILDVERSION=""
@@ -68,8 +68,14 @@ BUILDLOG="$SOURCEDIR/$OUTDIR/zz_buildlog_$TC.log"
 # release directory in which the ready kernel zips land
 RELEASEDIR="$PROJECTDIR/releases"
 
-# this is the clang toolchain folder (root of toolchain folder without prefix) -> provided toolchain: https://github.com/mcdachpappe/mcd-clang (all in one combined toolset)
-CLANGTOOLCHAIN="/werkstatt/entwicklung/toolchains/clang/mcd-clang"
+# this is the stock google aarch64 toolchain folder (root of toolchain folder without prefix)
+STOCKTOOLCHAIN="/path/to/toolchains/aarch64-linux-android-4.9"
+
+# this is the stock google arm toolchain folder (root of toolchain folder without prefix)
+STOCK32TOOLCHAIN="/patch/to/toolchains/arm-linux-androideabi-4.9"
+
+# this is the clang toolchain folder (root of toolchain folder without prefix) -> provided toolchain: https://github.com/mcdachpappe/android_prebuilts_clang_kernel_linux-x86_clang-r416183b (all in one combined toolset)
+CLANGTOOLCHAIN="/path/to/toolchains/clang/android_prebuilts_clang_kernel_linux-x86_clang-r416183b"
 
 # set number of cpu cores to be used. leave empty for autodetection
 NUM_CORES=
@@ -158,20 +164,34 @@ build_clang() {
     if [ -f arch/arm64/configs/$KERNCONFIG ]; then
         make O=$OUTDIR ARCH=arm64 $KERNCONFIG
     else
-        echo "$KERNCONFIG config not found, be sure that it exist in $SOURCEDIR/arch/arm64/configs!!"
+        echo "$KERNCONFIG config not found, be sure that it exists in $SOURCEDIR/arch/arm64/configs!!"
         exit 1
     fi
     ./scripts/config --file out/.config -e BUILD_ARM64_DT_OVERLAY
     make O=$OUTDIR ARCH=arm64 olddefconfig
-    PATH="$CLANGTOOLCHAIN/bin:${PATH}" make -j$NUM_CORES O=$OUTDIR ARCH=arm64 LLVM=1 CC=clang CROSS_COMPILE=aarch64-linux-gnu- CROSS_COMPILE_ARM32=arm-linux-gnueabi- DTC_EXT=dtc 2>&1 | tee $BUILDLOG
+    PATH="$CLANGTOOLCHAIN/bin:$STOCKTOOLCHAIN/bin:$STOCK32TOOLCHAIN/bin:${PATH}" \
+    make -j$NUM_CORES O=$OUTDIR ARCH=arm64 \
+    CLANG_TRIPLE=aarch64-linux-gnu- \
+    CROSS_COMPILE=aarch64-linux-android- \
+    CROSS_COMPILE_ARM32=arm-linux-androideabi- \
+    CROSS_COMPILE_COMPAT=arm-linux-androideabi- \
+    HOSTCC="clang" \
+    HOSTCXX="clang++" \
+    CC=clang \
+    AR="llvm-ar" \
+    NM="llvm-nm" \
+    STRIP="llvm-strip" \
+    OBJCOPY="llvm-objcopy" \
+    OBJDUMP="llvm-objdump" \
+    DTC_EXT=dtc 2>&1 | tee $BUILDLOG
     echo ""
     echo "Build done!"
     endtime && endtime >> $BUILDLOG
     if [ -f $SOURCEDIR/$OUTDIR/arch/arm64/boot/Image.gz ]; then
         cp -rf $ANYKERNEL $OUTDIR/anykernel
-        if [ "$1" == "mcd-R-custom-zzupreme" ]; then
+        if [ "$1" == "mcd-CUSTOM-S-zzupreme" ]; then
             flavor=custom
-        elif [ "$1" == "mcd-R-custom-zzupreme" ]; then
+        elif [ "$1" == "mcd-OOS-R-zzupreme" ]; then
             flavor=oos
         fi
         cp -f $SOURCEDIR/$OUTDIR/arch/arm64/boot/Image.gz $OUTDIR/anykernel/kernels/$flavor
@@ -189,13 +209,13 @@ case "$1" in
 
 clang)
 clear
-build_clang mcd-R-custom-zzupreme
+build_clang mcd-CUSTOM-S-zzupreme
 if [ "$2" == "break" ]; then
     pause "CUSTOM build done, press enter to continue with OOS build..."
 fi
 cp -f $SOURCEDIR/$OUTDIR/anykernel/kernels/custom/Image.gz-dtb $SOURCEDIR
 $IAMHERE/$0 clean
-build_clang mcd-R-zzupreme
+build_clang mcd-OOS-R-zzupreme
 if [ "$2" == "break" ]; then
     pause "OOS build done, press enter to continue with packing images into anykernel zip..."
 fi
