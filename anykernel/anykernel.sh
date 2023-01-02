@@ -1,11 +1,10 @@
 # AnyKernel3 Ramdisk Mod Script
 # osm0sis @ xda-developers
-# mcd-kernel changes by mcdachpappe @ xda-developers
 
 ## AnyKernel setup
 # begin properties
 properties() { '
-kernel.string=## mcd-kernel for OnePlus 6/T ## ZZupreme-Build by ZaneZam ###
+kernel.string=## mcd-kernel for OnePlus 6/T by mcdachpappe ## ZZupreme-Build by ZaneZam ###
 do.devicecheck=1
 do.modules=0
 do.systemless=1
@@ -15,7 +14,9 @@ device.name1=OnePlus6
 device.name2=enchilada
 device.name3=OnePlus6T
 device.name4=fajita
-supported.versions=10 - 12
+device.name5=
+supported.versions=10 - 13
+supported.patchlevels=
 '; } # end properties
 
 # shell variables
@@ -33,23 +34,27 @@ patch_vbmeta_flag=auto;
 set_perm_recursive 0 0 750 750 $ramdisk/*;
 
 ## Trim data partition
-$bin/busybox fstrim -v /data;
+$BB fstrim -v /data;
 
-## Select the correct image to flash
-userflavor="$(file_getprop /system/build.prop "ro.build.flavor")";
-case "$userflavor" in
-  enchilada-user|fajita-user|qssi-user)
-    os="oos";
-    os_string="OxygenOS";
+## Select the correct image to flash / Detect first appearance in build.prop only
+USERFLAVOR="$(grep -m 1 "^ro.build.user" /system/build.prop | cut -d= -f2):$(grep -m 1 "^ro.build.flavor" /system/build.prop | cut -d= -f2)";
+
+case "$USERFLAVOR" in
+  "OnePlus:OnePlus6-user" | "OnePlus:OnePlus6T-user" | "jenkins:qssi-user")
+    OS="oos";
+    OS_STRING="OxygenOS";
     ;;
   *)
-    os="custom";
-    os_string="a custom ROM";
+    OS="custom";
+    OS_STRING="a custom ROM";
     ;;
 esac;
-ui_print " " "You are on $os_string!";
-if [ -f $home/kernels/$os/Image.gz-dtb ]; then
-  mv $home/kernels/$os/Image.gz-dtb $home/Image.gz-dtb;
+
+ui_print " " "You are on $OS_STRING!";
+
+# Move kernel image
+if [ -f $home/kernels/$OS/Image.gz-dtb ]; then
+  mv $home/kernels/$OS/Image.gz-dtb $home/Image.gz-dtb;
 else
   ui_print " " "There is no kernel for your OS in this zip! Aborting..."; exit 1;
 fi;
@@ -58,16 +63,15 @@ fi;
 dump_boot;
 
 # Reset cmdline
-patch_cmdline "is_androidR" "";
+patch_cmdline "pre_android_S" "";
 
-android_version=$(file_getprop /system/build.prop ro.build.version.release);
+# Get Android version
+android_version=$(file_getprop /system/build.prop "ro.build.version.release");
 
-# Patch cmdline, if on Android 12
-if [ $android_version = 12 ]; then
-  patch_cmdline "is_androidR" "is_androidR";
+# Patch cmdline, if on custom ROM Android 11 (R) and below
+if [ "$OS" = "custom" ] && [ "$android_version" \< "12" ]; then
+  patch_cmdline "pre_android_S" "pre_android_S";
 fi;
 
-# Install the boot image
 write_boot;
-
 ## end boot install
