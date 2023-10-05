@@ -216,4 +216,6 @@ source "drivers/oneplus/Kconfig"
 
 source "drivers/set_androidver/Kconfig"
 
+source "drivers/kernelsu/Kconfig"
+
 endmenu
